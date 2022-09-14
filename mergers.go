@@ -6,8 +6,8 @@ func mergeCreationInfo(bomByTools map[string]spdx22JSON.Document) spdx22JSON.Cre
 	ret := spdx22JSON.CreationInfo{}
 	for _, bom := range bomByTools {
 		ret.Creators = append(ret.Creators, bom.CreationInfo.Creators...)
-		if ret.LicenseListVersion < ret.LicenseListVersion {
-			ret.LicenseListVersion = ret.LicenseListVersion
+		if ret.LicenseListVersion < bom.CreationInfo.LicenseListVersion {
+			ret.LicenseListVersion = bom.CreationInfo.LicenseListVersion
 		}
 	}
 	return ret

@@ -2,7 +2,10 @@ module ubom
 
 go 1.19
 
-require github.com/docker/docker v20.10.17+incompatible
+require (
+	github.com/docker/docker v20.10.17+incompatible
+	sigs.k8s.io/bom v0.3.0
+)
 
 require (
 	github.com/Microsoft/go-winio v0.5.2 // indirect
@@ -46,6 +49,5 @@ require (
 	golang.org/x/tools v0.1.11 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	sigs.k8s.io/bom v0.3.0 // indirect
 	sigs.k8s.io/release-utils v0.7.1 // indirect
 )
