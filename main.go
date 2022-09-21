@@ -8,8 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
-
-	spdx22JSON "sigs.k8s.io/bom/pkg/spdx/json/v2.2.2"
 )
 
 const (
@@ -19,35 +17,37 @@ const (
 	SpdxImageURL  string = "docker.io/spdx/spdx-sbom-generator"
 )
 
-// var SpdxToolSlugToPurlType = map[string]string{
-// 	"cargo":      "cargo",
-// 	"composer":   "composer",
-// 	"bundler":    "gem",
-// 	"go-mod":     "golang",
-// 	"Java-Maven": "maven",
-// 	"npm":        "npm",
-// 	"nuget":      "nuget",
-// 	"pipenv":     "pypi",
-// 	"poetry":     "pypi",
-// 	"pyenv":      "pypi",
-// 	"swift":      "swift",
-// 	"yarn":       "npm",
-// }
-
-// func ecosystemFromSpdxFileName(fileName string) string {
-// 	parts := strings.Split(fileName, ".")
-// 	return SpdxToolSlugToPurlType[parts[0][4:]]
-// }
-
 func main() {
 	dirToScan := flag.String("s", "./", "directory to scan")
+	pathToMerged := flag.String("p", "./", "path to bom by tools")
 	flag.Parse()
+
+	if pathToMerged != nil {
+		fullPath, err := filepath.Abs(*pathToMerged)
+		if err != nil {
+			panic(err)
+		}
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			panic(err)
+		}
+		z := make(map[string]SpdxDocument)
+		if err := json.Unmarshal(data, &z); err != nil {
+			panic(err)
+		}
+		doc := Merge(z)
+		content, err := json.MarshalIndent(doc, "\t", "\t")
+		if err := os.WriteFile("full_merged.json", content, 0666); err != nil {
+			panic(err)
+		}
+		return
+	}
 	fullPath, err := filepath.Abs(*dirToScan)
 	if err != nil {
 		panic(err)
 	}
 
-	scanResultsByTool := make(map[string]spdx22JSON.Document)
+	scanResultsByTool := make(map[string]SpdxDocument)
 
 	wg := sync.WaitGroup{}
 	wg.Add(4)
@@ -76,13 +76,14 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		t := spdx22JSON.Document{}
+		t := SpdxDocument{}
 		if err := json.Unmarshal(data, &t); err != nil {
 			panic(err)
 		}
-		scanResultsByTool["msbom"] = t
+		scanResultsByTool[MsBom.String()] = t
 	}()
-
+	
+	//spdx generator
 	go func() {
 		defer wg.Done()
 		tmpDir, err := os.MkdirTemp(os.TempDir(), "ubom")
@@ -105,13 +106,13 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		merged := spdx22JSON.Document{}
+		merged := SpdxDocument{}
 		for _, entry := range entries {
 			if entry.IsDir() {
 				continue
 			}
 			outFile := filepath.Join(tmpDir, entry.Name())
-			doc := spdx22JSON.Document{}
+			doc := SpdxDocument{}
 			data, err := os.ReadFile(outFile)
 			if err != nil {
 				panic(err)
@@ -124,7 +125,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		scanResultsByTool["spdx_tool"] = merged
+		scanResultsByTool[SpdxBom.String()] = merged
 	}()
 
 	// // // k8s BOM generator
@@ -134,11 +135,11 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		k8Bom := spdx22JSON.Document{}
+		k8Bom := SpdxDocument{}
 		if err := json.Unmarshal(k8BomOut, &k8Bom); err != nil {
 			panic(err)
 		}
-		scanResultsByTool["k8_bom"] = k8Bom
+		scanResultsByTool[K8Bom.String()] = k8Bom
 	}()
 
 	// // syft BOM generator
@@ -152,9 +153,9 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		syftRes := spdx22JSON.Document{}
+		syftRes := SpdxDocument{}
 		json.Unmarshal(syftBomOut, &syftRes)
-		scanResultsByTool["syft"] = syftRes
+		scanResultsByTool[Syft.String()] = syftRes
 	}()
 
 	fmt.Println("Triggered all scans")
