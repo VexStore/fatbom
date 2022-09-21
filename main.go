@@ -8,21 +8,25 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+
+	"github.com/schollz/progressbar/v3"
 )
 
 const (
 	SyftImageURL  string = "docker.io/anchore/syft"
 	K8BomImageURL string = "docker.io/sbs2001/k8s_bom:latest"
-	MSBomURL      string = "ghcr.io/sbs2001/ms_sbom:v0.0.2"
+	MSBomURL      string = "ghcr.io/sbs2001/ms_sbom:v0.0.3"
 	SpdxImageURL  string = "docker.io/spdx/spdx-sbom-generator"
 )
 
 func main() {
-	dirToScan := flag.String("s", "./", "directory to scan")
-	pathToMerged := flag.String("p", "./", "path to bom by tools")
+	dirToScan := flag.String("s", "", "directory to scan")
+	pathToMerged := flag.String("p", "", "path to bom by tools")
 	flag.Parse()
 
-	if pathToMerged != nil {
+	if pathToMerged != nil && *pathToMerged != "" {
+		fmt.Println(*pathToMerged)
+		fmt.Println(*dirToScan)
 		fullPath, err := filepath.Abs(*pathToMerged)
 		if err != nil {
 			panic(err)
@@ -53,6 +57,8 @@ func main() {
 	wg.Add(4)
 	// microsoft bom generator
 	go func() {
+		bar := progressbar.Default(-1)
+		defer bar.Finish()
 		defer wg.Done()
 		tmpDir, err := os.MkdirTemp(os.TempDir(), "ubom")
 		if err != nil {
@@ -82,7 +88,7 @@ func main() {
 		}
 		scanResultsByTool[MsBom.String()] = t
 	}()
-	
+
 	//spdx generator
 	go func() {
 		defer wg.Done()
