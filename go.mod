@@ -2,10 +2,13 @@ module ubom
 
 go 1.19
 
-require sigs.k8s.io/bom v0.3.0
+require (
+	github.com/briandowns/spinner v1.19.0
+	github.com/sbs2001/uispinner v0.0.0-20220922060611-3e333078166c
+	sigs.k8s.io/bom v0.3.0
+)
 
 require (
-	github.com/briandowns/spinner v1.19.0 // indirect
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/gosuri/uilive v0.0.4 // indirect
 	github.com/jaxleof/uispinner v1.0.0 // indirect

@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,40 +10,40 @@ import (
 	"time"
 
 	"github.com/briandowns/spinner"
-	"github.com/jaxleof/uispinner"
+	"github.com/sbs2001/uispinner"
 )
 
 var cj = uispinner.New()
-var DockerCmd = "podman"
-
-const (
-	SyftImageURL  string = "docker.io/anchore/syft"
-	K8BomImageURL string = "docker.io/sbs2001/k8s_bom:latest"
-	MSBomURL      string = "ghcr.io/sbs2001/ms_sbom:v0.0.3"
-	SpdxImageURL  string = "docker.io/spdx/spdx-sbom-generator"
-)
+var DockerCmd string
 
 func pullDockerImageWithSpinner(imageURL string, sp *uispinner.Spinner) error {
-	sp.AddSpinner(spinner.CharSets[34], 50*time.Millisecond).
+	newSp := sp.AddSpinner(spinner.CharSets[0], 50*time.Millisecond).
 		SetComplete(" Pulled " + imageURL).SetSuffix(" Pulling " + imageURL)
-	defer sp.Done()
+	defer newSp.Done()
 	_, err := exec.Command(DockerCmd, "pull", imageURL).CombinedOutput()
 	return err
 }
 
+func setDockerCmd() {
+	if cmd := os.Getenv("DOCKER_CMD"); cmd != "" {
+		DockerCmd = cmd
+	} else {
+		DockerCmd = "docker"
+	}
+}
+
 func getSpinner(during string, onComplete string) *uispinner.Spinner {
-	return cj.AddSpinner(spinner.CharSets[34], 50*time.Millisecond).SetComplete(onComplete).SetSuffix(during)
+	return cj.AddSpinner(spinner.CharSets[0], 50*time.Millisecond).SetComplete(onComplete).SetSuffix(during)
 }
 
 func main() {
+	setDockerCmd()
 	dirToScan := flag.String("s", "", "directory to scan")
 	pathToMerged := flag.String("p", "", "path to bom by tools")
 	flag.Parse()
 	cj.Start()
 	defer cj.Stop()
 	if pathToMerged != nil && *pathToMerged != "" {
-		fmt.Println(*pathToMerged)
-		fmt.Println(*dirToScan)
 		fullPath, err := filepath.Abs(*pathToMerged)
 		if err != nil {
 			panic(err)
@@ -75,7 +74,7 @@ func main() {
 	wg.Add(4)
 	// microsoft bom generator
 	go func() {
-		sp := getSpinner("Microsoft SBOM Generating", "Finished")
+		sp := getSpinner(" Microsoft SBOM Generating", " Microsoft SBOM Finished")
 		defer sp.Done()
 		if err := pullDockerImageWithSpinner(MSBomURL, sp); err != nil {
 			panic(err)
@@ -112,9 +111,9 @@ func main() {
 
 	//spdx generator
 	go func() {
-		spinner := getSpinner("SPDX SBOM Generating", "Finished")
-		defer spinner.Done()
-		if err := pullDockerImageWithSpinner(SpdxImageURL, spinner); err != nil {
+		sp := getSpinner(" SPDX SBOM Generating", " SPDX SBOM Finished")
+		defer sp.Done()
+		if err := pullDockerImageWithSpinner(SpdxImageURL, sp); err != nil {
 			panic(err)
 		}
 		defer wg.Done()
@@ -123,7 +122,7 @@ func main() {
 			panic(tmpDir)
 		}
 		_, err = exec.Command(
-			DockerCmd, "run", "-v", fullPath+":"+"/scan",
+			DockerCmd, "run", "--rm", "-v", fullPath+":"+"/scan",
 			"-v", tmpDir+":"+tmpDir,
 			SpdxImageURL, "-p", "/scan",
 			"-o", tmpDir,
@@ -162,9 +161,9 @@ func main() {
 
 	// // // k8s BOM generator
 	go func() {
-		spinner := getSpinner("K8-BOM Generating", "Finished")
-		defer spinner.Done()
-		if err := pullDockerImageWithSpinner(K8BomImageURL, spinner); err != nil {
+		sp := getSpinner(" K8-BOM Generating", " K8-BOM Finished")
+		defer sp.Done()
+		if err := pullDockerImageWithSpinner(K8BomImageURL, sp); err != nil {
 			panic(err)
 		}
 		defer wg.Done()
@@ -181,9 +180,9 @@ func main() {
 
 	// // syft BOM generator
 	go func() {
-		spinner := getSpinner("Syft Generating", "Finished")
-		defer spinner.Done()
-		if err := pullDockerImageWithSpinner(SyftImageURL, spinner); err != nil {
+		sp := getSpinner(" Syft Generating", " Syft Finished")
+		defer sp.Done()
+		if err := pullDockerImageWithSpinner(SyftImageURL, sp); err != nil {
 			panic(err)
 		}
 		defer wg.Done()
@@ -200,10 +199,10 @@ func main() {
 		scanResultsByTool[Syft.String()] = syftRes
 	}()
 
-	fmt.Println("Triggered all scans")
 	wg.Wait()
 
-	data, err := json.Marshal(scanResultsByTool)
+	merged := Merge(scanResultsByTool)
+	data, err := json.MarshalIndent(merged, "\t", "\t")
 	if err != nil {
 		panic(err)
 	}

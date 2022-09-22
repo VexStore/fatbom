@@ -23,6 +23,8 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/rivo/uniseg v0.2.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.4.2 h1:YwD0ulJSJytLpiaWua0sBDusfsCZohxjxzVTYjwxfV8=
 github.com/rivo/uniseg v0.4.2/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUcx88=
+github.com/sbs2001/uispinner v0.0.0-20220922060611-3e333078166c h1:U2PxsnFWdBC9eAz5g3IEjOcdrUFXzBgTUyYJFhq95EY=
+github.com/sbs2001/uispinner v0.0.0-20220922060611-3e333078166c/go.mod h1:uOuIOAqKwKD547EmiobBGI6kh50y1GUvegtyY66zJb0=
 github.com/schollz/progressbar/v3 v3.11.0 h1:3nIBUF1Zw/pGUaRHP7PZWmARP7ZQbWQ6vL6hwoQiIvU=
 github.com/schollz/progressbar/v3 v3.11.0/go.mod h1:R2djRgv58sn00AGysc4fN0ip4piOGd3z88K+zVBjczs=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
