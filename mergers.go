@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path"
 
 	spdx22JSON "sigs.k8s.io/bom/pkg/spdx/json/v2.2.2"
 )
@@ -25,6 +26,23 @@ func mergeCreationInfo(bomByTools map[string]SpdxDocument) spdx22JSON.CreationIn
 		}
 	}
 	return ret
+}
+
+func mergedFiles(bomByTools map[string]SpdxDocument) []spdx22JSON.File {
+	normalizeFilePaths(bomByTools)
+	files := make([]spdx22JSON.File, 0)
+	for _, doc := range bomByTools {
+		files = append(files, doc.Files...)
+	}
+	return files
+}
+
+func normalizeFilePaths(bomByTools map[string]SpdxDocument) {
+	for t, doc := range bomByTools {
+		for i, _ := range doc.Files {
+			bomByTools[t].Files[i].Name = path.Clean(bomByTools[t].Files[i].Name)
+		}
+	}
 }
 
 // FIXME: Once, Spdx bom generator provides purls, the key of this index should be purls instead of name+version
@@ -68,5 +86,6 @@ func Merge(bomByTools map[string]SpdxDocument) SpdxDocument {
 	ret := SpdxDocument{}
 	ret.CreationInfo = mergeCreationInfo(bomByTools)
 	ret.Packages = mergePackages(bomByTools)
+	ret.Files = mergedFiles(bomByTools)
 	return ret
 }
