@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path"
+	"strings"
 	"time"
 
 	spdx22JSON "sigs.k8s.io/bom/pkg/spdx/json/v2.2.2"
@@ -73,7 +74,9 @@ func mergedPackages(bomByTools map[string]SpdxDocument) []SpdxPackage {
 		for _, pbt := range pbts {
 			for _, ref := range pbt.Package.ExternalRefs {
 				key := ExternalRefKey{Type: ref.Type, Locator: ref.Locator}
-				ref.Comment = extRefSet[key].Comment + fmt.Sprintf("Found by %s Tool. ", pbt.BomTool)
+				if !strings.Contains(extRefSet[key].Comment, pbt.BomTool){
+					ref.Comment = extRefSet[key].Comment + fmt.Sprintf("Found by %s Tool. ", pbt.BomTool)
+				}
 				extRefSet[key] = ref
 			}
 		}
