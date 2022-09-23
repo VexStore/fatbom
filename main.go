@@ -80,7 +80,7 @@ func main() {
 			panic(err)
 		}
 		defer wg.Done()
-		tmpDir, err := os.MkdirTemp(os.TempDir(), "ubom")
+		tmpDir, err := os.MkdirTemp(os.TempDir(), "fatbom")
 		if err != nil {
 			panic(tmpDir)
 		}
@@ -117,7 +117,7 @@ func main() {
 			panic(err)
 		}
 		defer wg.Done()
-		tmpDir, err := os.MkdirTemp(os.TempDir(), "ubom")
+		tmpDir, err := os.MkdirTemp(os.TempDir(), "fatbom")
 		if err != nil {
 			panic(tmpDir)
 		}
