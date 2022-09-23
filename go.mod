@@ -1,6 +1,6 @@
 module github.com/sbs2001/fatbom
 
-go 1.19
+go 1.17
 
 require (
 	github.com/briandowns/spinner v1.19.0
