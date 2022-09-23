@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,13 +12,15 @@ import (
 
 	"github.com/briandowns/spinner"
 	"github.com/sbs2001/uispinner"
+	"github.com/sirupsen/logrus"
 )
 
 var cj = uispinner.New()
 var DockerCmd string
+var fullPathToDirToScan string
 
 func pullDockerImageWithSpinner(imageURL string, sp *uispinner.Spinner) error {
-	newSp := sp.AddSpinner(spinner.CharSets[0], 50*time.Millisecond).
+	newSp := sp.AddSpinner(charsetWithColor(11, 34), 50*time.Millisecond).
 		SetComplete(" Pulled " + imageURL).SetSuffix(" Pulling " + imageURL)
 	defer newSp.Done()
 	_, err := exec.Command(DockerCmd, "pull", imageURL).CombinedOutput()
@@ -32,8 +35,17 @@ func setDockerCmd() {
 	}
 }
 
+func charsetWithColor(index int, color int) []string {
+	ori := spinner.CharSets[index]
+	colored := make([]string, len(ori))
+	for i := range ori {
+		colored[i] = fmt.Sprintf("\x1b[%dm%s\x1b[0m", color, ori[i])
+	}
+	return colored
+}
+
 func getSpinner(during string, onComplete string) *uispinner.Spinner {
-	return cj.AddSpinner(spinner.CharSets[0], 50*time.Millisecond).SetComplete(onComplete).SetSuffix(during)
+	return cj.AddSpinner(charsetWithColor(11, 34), 50*time.Millisecond).SetComplete(onComplete).SetSuffix(during)
 }
 
 func main() {
@@ -42,42 +54,47 @@ func main() {
 	pathToMerged := flag.String("p", "", "path to bom by tools")
 	flag.Parse()
 	cj.Start()
-	defer cj.Stop()
 	if pathToMerged != nil && *pathToMerged != "" {
-		fullPath, err := filepath.Abs(*pathToMerged)
+		fullPathToMerged, err := filepath.Abs(*pathToMerged)
 		if err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
-		data, err := os.ReadFile(fullPath)
+		data, err := os.ReadFile(fullPathToMerged)
 		if err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		z := make(map[string]SpdxDocument)
 		if err := json.Unmarshal(data, &z); err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		doc := Merge(z)
 		content, err := json.MarshalIndent(doc, "\t", "\t")
+		if err != nil {
+			logrus.Fatal(err)
+		}
 		if err := os.WriteFile("full_merged.json", content, 0666); err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		return
 	}
-	fullPath, err := filepath.Abs(*dirToScan)
+	var err error
+	fullPathToDirToScan, err = filepath.Abs(*dirToScan)
 	if err != nil {
-		panic(err)
+		logrus.Fatal(err)
 	}
 
 	scanResultsByTool := make(map[string]SpdxDocument)
 
 	wg := sync.WaitGroup{}
 	wg.Add(4)
+
+	logrus.Info("Starting Scans\n\n")
 	// microsoft bom generator
 	go func() {
 		sp := getSpinner(" Microsoft SBOM Generating", " Microsoft SBOM Finished")
 		defer sp.Done()
 		if err := pullDockerImageWithSpinner(MSBomURL, sp); err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		defer wg.Done()
 		tmpDir, err := os.MkdirTemp(os.TempDir(), "fatbom")
@@ -85,26 +102,26 @@ func main() {
 			panic(tmpDir)
 		}
 		_, err = exec.Command(DockerCmd, "run", "-t",
-			"-v", fullPath+":"+"/scan",
+			"-v", fullPathToDirToScan+":"+"/scan",
 			"-v", tmpDir+":"+tmpDir,
 			MSBomURL, "generate", "-b", "/scan",
-			"-bc", "/scan", "-pn", "blah",
+			"-bc", "/scan", "-pn", "RootPkg",
 			"-nsb", "https://companyName.com/teamName",
 			"-pv", "0.0.1", "-D", "true", "-V", "Fatal",
 			"-m", tmpDir,
 		).CombinedOutput()
 
 		if err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		manifestPath := filepath.Join(tmpDir, "_manifest", "spdx_2.2", "manifest.spdx.json")
 		data, err := os.ReadFile(manifestPath)
 		if err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		t := SpdxDocument{}
 		if err := json.Unmarshal(data, &t); err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		scanResultsByTool[MsBom.String()] = t
 	}()
@@ -114,7 +131,7 @@ func main() {
 		sp := getSpinner(" SPDX SBOM Generating", " SPDX SBOM Finished")
 		defer sp.Done()
 		if err := pullDockerImageWithSpinner(SpdxImageURL, sp); err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		defer wg.Done()
 		tmpDir, err := os.MkdirTemp(os.TempDir(), "fatbom")
@@ -122,7 +139,7 @@ func main() {
 			panic(tmpDir)
 		}
 		_, err = exec.Command(
-			DockerCmd, "run", "--rm", "-v", fullPath+":"+"/scan",
+			DockerCmd, "run", "--rm", "-v", fullPathToDirToScan+":"+"/scan",
 			"-v", tmpDir+":"+tmpDir,
 			SpdxImageURL, "-p", "/scan",
 			"-o", tmpDir,
@@ -130,12 +147,12 @@ func main() {
 		).CombinedOutput()
 
 		if err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 
 		entries, err := os.ReadDir(tmpDir)
 		if err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		merged := SpdxDocument{}
 		for _, entry := range entries {
@@ -146,7 +163,7 @@ func main() {
 			doc := SpdxDocument{}
 			data, err := os.ReadFile(outFile)
 			if err != nil {
-				panic(err)
+				logrus.Fatal(err)
 			}
 			json.Unmarshal(data, &doc)
 			merged.Files = append(merged.Files, doc.Files...)
@@ -154,7 +171,7 @@ func main() {
 			merged.Relationships = append(merged.Relationships, doc.Relationships...)
 		}
 		if err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		scanResultsByTool[SpdxBom.String()] = merged
 	}()
@@ -164,16 +181,16 @@ func main() {
 		sp := getSpinner(" K8-BOM Generating", " K8-BOM Finished")
 		defer sp.Done()
 		if err := pullDockerImageWithSpinner(K8BomImageURL, sp); err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		defer wg.Done()
-		k8BomOut, err := exec.Command(DockerCmd, "run", "-v", fullPath+":"+"/scan", K8BomImageURL, "generate", "/scan", "--format", "json").Output()
+		k8BomOut, err := exec.Command(DockerCmd, "run", "-v", fullPathToDirToScan+":"+"/scan", K8BomImageURL, "generate", "/scan", "--format", "json").Output()
 		if err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		k8Bom := SpdxDocument{}
 		if err := json.Unmarshal(k8BomOut, &k8Bom); err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		scanResultsByTool[K8Bom.String()] = k8Bom
 	}()
@@ -183,31 +200,45 @@ func main() {
 		sp := getSpinner(" Syft Generating", " Syft Finished")
 		defer sp.Done()
 		if err := pullDockerImageWithSpinner(SyftImageURL, sp); err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		defer wg.Done()
 		syftBomOut, err := exec.Command(
 			DockerCmd, "run", "-v",
-			fullPath+":"+"/scan", SyftImageURL,
+			fullPathToDirToScan+":"+"/scan", SyftImageURL,
 			"packages",
 			"dir:/scan", "-o", "spdx-json").CombinedOutput()
 		if err != nil {
-			panic(err)
+			logrus.Fatal(err)
 		}
 		syftRes := SpdxDocument{}
 		json.Unmarshal(syftBomOut, &syftRes)
 		scanResultsByTool[Syft.String()] = syftRes
 	}()
-
 	wg.Wait()
+	cj.Stop()
+	fmt.Println()
 
-	merged := Merge(scanResultsByTool)
-	data, err := json.MarshalIndent(merged, "\t", "\t")
+	data, err := json.MarshalIndent(scanResultsByTool, "\t", "\t")
 	if err != nil {
-		panic(err)
+		logrus.Fatal(err)
 	}
+	logrus.Info("Writing Semi Merged BOM to 'semi_merged_bom.json'")
+	if err := os.WriteFile("semi_merged_bom.json", data, 0666); err != nil {
+		logrus.Fatal(err)
+	}
+	logrus.Info("Wrote Semi Merged BOM to 'semi_merged_bom.json'")
+	logrus.Info("Merging Scan Results")
+	merged := Merge(scanResultsByTool)
+	logrus.Info("Merged Scan Results")
+	data, err = json.MarshalIndent(merged, "\t", "\t")
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	logrus.Info("Writing Merged BOM to 'merged_bom.json'")
 	if err := os.WriteFile("merged_bom.json", data, 0666); err != nil {
-		panic(err)
+		logrus.Fatal(err)
 	}
+	logrus.Info("Wrote Merged BOM to 'merged_bom.json'")
 
 }

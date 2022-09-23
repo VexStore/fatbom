@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path"
+	"time"
 
 	spdx22JSON "sigs.k8s.io/bom/pkg/spdx/json/v2.2.2"
 )
@@ -17,7 +18,7 @@ type PackageWithBomTool struct {
 	Package SpdxPackage
 }
 
-func mergeCreationInfo(bomByTools map[string]SpdxDocument) spdx22JSON.CreationInfo {
+func mergedCreationInfo(bomByTools map[string]SpdxDocument) spdx22JSON.CreationInfo {
 	ret := spdx22JSON.CreationInfo{}
 	for _, bom := range bomByTools {
 		ret.Creators = append(ret.Creators, bom.CreationInfo.Creators...)
@@ -25,6 +26,7 @@ func mergeCreationInfo(bomByTools map[string]SpdxDocument) spdx22JSON.CreationIn
 			ret.LicenseListVersion = bom.CreationInfo.LicenseListVersion
 		}
 	}
+	ret.Created = time.Now().Format(time.RFC3339)
 	return ret
 }
 
@@ -58,11 +60,14 @@ func createPackageIndex(bomByTools map[string]SpdxDocument) map[string][]Package
 	return pbtByNameVersion
 }
 
-func mergePackages(bomByTools map[string]SpdxDocument) []SpdxPackage {
+func mergedPackages(bomByTools map[string]SpdxDocument) []SpdxPackage {
 	idx := createPackageIndex(bomByTools)
 	ret := make([]SpdxPackage, len(idx))
 	i := 0
 	for _, pbts := range idx {
+		if len(pbts) == 1 && pbts[0].BomTool == MsBom.String() && len(pbts[0].Package.HasFiles) != 0 {
+			continue
+		}
 		p := pbts[0].Package
 		extRefSet := make(map[ExternalRefKey]SpdxPackageExternalRef)
 		for _, pbt := range pbts {
@@ -82,10 +87,35 @@ func mergePackages(bomByTools map[string]SpdxDocument) []SpdxPackage {
 	return ret
 }
 
+func createRelationships(doc *SpdxDocument) {
+	fileRelationships := make([]spdx22JSON.Relationship, len(doc.Files))
+	pkgRelationships := make([]spdx22JSON.Relationship, len(doc.Packages))
+
+	for i, file := range doc.Files {
+		fileRelationships[i].Type = "CONTAINS"
+		fileRelationships[i].Element = "SPDXRef-Package-scan"
+		fileRelationships[i].Related = file.ID
+	}
+
+	for i, pkg := range doc.Packages {
+		pkgRelationships[i].Type = "DEPENDS_ON"
+		pkgRelationships[i].Element = "SPDXRef-Package-scan"
+		pkgRelationships[i].Related = pkg.ID
+	}
+	doc.Relationships = append(doc.Relationships, fileRelationships...)
+	doc.Relationships = append(doc.Relationships, pkgRelationships...)
+}
+
 func Merge(bomByTools map[string]SpdxDocument) SpdxDocument {
 	ret := SpdxDocument{}
-	ret.CreationInfo = mergeCreationInfo(bomByTools)
-	ret.Packages = mergePackages(bomByTools)
+	ret.CreationInfo = mergedCreationInfo(bomByTools)
+	ret.Packages = mergedPackages(bomByTools)
 	ret.Files = mergedFiles(bomByTools)
+	createRelationships(&ret)
+	ret.Name = fmt.Sprintf("SPDX-SBOM-%s", fullPathToDirToScan)
+	ret.DataLicense = "CC0-1.0"
+	ret.DocumentDescribes = []string{"SPDXRef-Package-scan"}
+	ret.Version = "SPDX-2.2"
+	ret.ID = "SPDXRef-DOCUMENT"
 	return ret
 }
