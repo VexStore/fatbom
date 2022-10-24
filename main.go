@@ -55,7 +55,7 @@ func main() {
 	setDockerCmd()
 	dirToScan := flag.String("s", "", "directory to scan")
 	pathToMerged := flag.String("p", "", "path to bom by tools")
-	format := flag.String("f", "spdx-json", "output format, valid choices spdx-json or spdx")
+	format := flag.String("f", "spdx", "output format, valid choices spdx-json or spdx")
 
 	flag.Parse()
 	if pathToMerged != nil && *pathToMerged != "" {
