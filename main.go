@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -52,6 +55,8 @@ func main() {
 	setDockerCmd()
 	dirToScan := flag.String("s", "", "directory to scan")
 	pathToMerged := flag.String("p", "", "path to bom by tools")
+	format := flag.String("f", "spdx-json", "output format, valid choices spdx-json or spdx")
+
 	flag.Parse()
 	if pathToMerged != nil && *pathToMerged != "" {
 		fullPathToMerged, err := filepath.Abs(*pathToMerged)
@@ -75,6 +80,9 @@ func main() {
 			panic(err)
 		}
 		return
+	}
+	if *format != "spdx-json" && *format != "spdx" {
+		log.Fatalf("invalid value for -f flag provided n provided '%s'", *format)
 	}
 	var err error
 	fullPathToDirToScan, err = filepath.Abs(*dirToScan)
@@ -218,26 +226,36 @@ func main() {
 	cj.Stop()
 	fmt.Println()
 
-	data, err := json.MarshalIndent(scanResultsByTool, "\t", "\t")
-	if err != nil {
-		panic(err)
-	}
-	logrus.Info("Writing Semi Merged BOM to 'semi_merged_bom.json'")
-	if err := os.WriteFile("semi_merged_bom.json", data, 0666); err != nil {
-		panic(err)
-	}
-	logrus.Info("Wrote Semi Merged BOM to 'semi_merged_bom.json'")
 	logrus.Info("Merging Scan Results")
 	merged := Merge(scanResultsByTool)
 	logrus.Info("Merged Scan Results")
-	data, err = json.MarshalIndent(merged, "\t", "\t")
+	var fileName string
+	var data []byte
+	if *format == "spdx-json" {
+		fileName = "fatbom.json"
+		data, err = json.MarshalIndent(merged, "\t", "\t")
+		if err != nil {
+			panic(err)
+		}
+	} else if *format == "spdx" {
+		fileName = "fatbom.spdx"
+		builder := bytes.NewBufferString("")
+		tmpl, err := template.New("spdx_template").Parse(SpdxTemplate)
+		if err != nil {
+			panic(err)
+		}
+		if err := tmpl.Execute(builder, merged); err != nil {
+			panic(err)
+		}
+		data = []byte(builder.String())
+	}
 	if err != nil {
 		panic(err)
 	}
-	logrus.Info("Writing Merged BOM to 'merged_bom.json'")
-	if err := os.WriteFile("merged_bom.json", data, 0666); err != nil {
+	logrus.Infof("Writing FatBOM to '%s'", fileName)
+	if err := os.WriteFile(fileName, data, 0666); err != nil {
 		panic(err)
 	}
-	logrus.Info("Wrote Merged BOM to 'merged_bom.json'")
+	logrus.Infof("Wrote FatBOM to '%s'", fileName)
 
 }

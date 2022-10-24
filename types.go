@@ -13,10 +13,10 @@ const (
 )
 
 const (
-	SyftImageURL  string = "docker.io/anchore/syft"
-	K8BomImageURL string = "docker.io/sbs2001/k8s_bom:latest"
+	SyftImageURL  string = "docker.io/anchore/syft:v0.59.0"
+	K8BomImageURL string = "docker.io/sbs2001/k8s_bom:v0.3.1"
 	MSBomURL      string = "ghcr.io/sbs2001/ms_sbom:v0.0.3"
-	SpdxImageURL  string = "docker.io/spdx/spdx-sbom-generator"
+	SpdxImageURL  string = "docker.io/spdx/spdx-sbom-generator:v0.0.14"
 )
 
 type SpdxPackageExternalRef struct {
